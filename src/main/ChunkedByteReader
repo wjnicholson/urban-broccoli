@@ -1,0 +1,67 @@
+import java.nio.ByteBuffer;
+
+public final class ChunkedByteReader {
+
+  private int offset = 0;
+
+  private final byte[] lengthBuffer = new byte[4];
+  private int readLengthBytes = 0;
+
+  private byte[] messageBuffer = null;
+  private int readMessageBytes = 0;
+
+  public void accept(byte[] chunk) {
+    offset = 0;
+    while (offset < chunk.length && readLength(chunk) && readMessage(chunk)) {
+      process(messageBuffer);
+      resetBuffers();
+    }
+  }
+
+  private boolean readLength(byte[] chunk) {
+    if (readLengthBytes == 4) {
+      return true;
+    }
+    int amountRead = readBytes(lengthBuffer, readLengthBytes, chunk);
+    readLengthBytes += amountRead;
+
+    boolean readLength = readLengthBytes == lengthBuffer.length;
+    if (readLength) {
+      int messageLength = ByteBuffer.wrap(lengthBuffer).getInt();
+      messageBuffer = new byte[messageLength];
+    }
+
+    return readLength;
+  }
+
+  private boolean readMessage(byte[] chunk) {
+    if (readLengthBytes != 4 || messageBuffer == null) {
+      throw new IllegalStateException("Must have read length first");
+    }
+
+    int amountRead = readBytes(messageBuffer, readMessageBytes, chunk);
+    readMessageBytes += amountRead;
+
+    return readMessageBytes == messageBuffer.length;
+  }
+
+  private int readBytes(byte[] into, int intoIndex, byte[] chunk) {
+    int readAmount = Math.min(into.length - intoIndex, chunk.length - offset);
+    System.arraycopy(chunk, offset, into, intoIndex, readAmount);
+    offset += readAmount;
+    return readAmount;
+  }
+
+  private void resetBuffers() {
+    readLengthBytes = 0;
+    messageBuffer = null;
+    readMessageBytes = 0;
+  }
+
+  public void process(byte[] message) {
+    // do things downstream
+  }
+
+  public static void main(String[] args) {
+  }
+}
